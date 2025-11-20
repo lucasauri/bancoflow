@@ -180,6 +180,7 @@ SELECT
     ((estoque_inicial + entradas - saidas) * preco) AS valor_total_estoque
 FROM public.produtos
 ORDER BY nome;
+```
 🛠 Comandos Úteis
 Backup do Banco
 Bash
@@ -190,8 +191,185 @@ Bash
 
 pg_restore -U postgres -d hortiflow -v "backup_hortiflow.sql"
 
-<img width="527" height="503" alt="Untitled diagram-2025-11-20-160202" src="https://github.com/user-attachments/assets/c1a06dae-f0a8-4f17-8883-f83e014c2688" />
 
+<img width="527" height="503" alt="Untitled diagram-2025-11-20-160202" src="https://github.com/user-attachments/assets/c1a06dae-f0a8-4f17-8883-f83e014c2688" />
+# 🏗️ HortiFlow - Engenharia de Software
+
+Documentação técnica da arquitetura, modelagem UML e metodologia de desenvolvimento do sistema HortiFlow.
+
+---
+
+## 📌 Visão Geral
+
+Este documento detalha as decisões de projeto e a modelagem do sistema, servindo como guia para o desenvolvimento e manutenção. A engenharia do **HortiFlow** foi baseada em uma abordagem orientada a objetos e arquitetura em camadas, utilizando a **UML (Unified Modeling Language)** para padronizar a documentação dos requisitos funcionais e do comportamento do sistema.
+
+O objetivo desta documentação é fornecer uma visão clara de *como* o software foi estruturado antes e durante a implementação, garantindo o alinhamento entre as regras de negócio e o código final.
+
+---
+
+## 🛠️ Metodologia e Ferramentas
+
+Para a organização e versionamento do projeto, foram utilizadas as seguintes práticas e ferramentas:
+
+- **Metodologia de Desenvolvimento:** Iterativa e Incremental (focada em entregas por camadas: Backend -> Banco -> Frontend).
+- **Modelagem:** UML 2.0 para diagramação estática e dinâmica.
+- Modelo caso de uso
+ ```mermaid
+graph LR
+    %% Atores
+    Admin((Gerente))
+    
+    %% Sistema
+    subgraph "Sistema HortiFlow"
+        UC1(Gerenciar Produtos)
+        UC2(Gerenciar Clientes)
+        UC3(Registrar Venda)
+        UC4(Movimentar Estoque)
+        UC5(Visualizar Dashboard)
+        UC6(Gerar Relatórios)
+    end
+
+    %% Relacionamentos
+    Admin --> UC1
+    Admin --> UC2
+    Admin --> UC3
+    Admin --> UC4
+    Admin --> UC5
+
+    %% Inclusões e Extensões (Simuladas)
+    UC3 -.->|include| UC4
+    UC6 -.->|extend| UC5
+    
+    %% Estilização para parecer Caso de Uso
+    style Admin fill:#f9f,stroke:#333,stroke-width:2px
+    style UC1 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+    style UC2 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+    style UC3 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+    style UC4 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+    style UC5 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+    style UC6 fill:#fff,stroke:#333,stroke-width:1px,rx:20,ry:20
+```
+Diagrama de Sequência (Fluxo de Venda)
+```mermaid
+graph TD
+    %% Atores e Componentes
+    FRONT(Frontend)
+    CTRL(VendaController)
+    SVC(VendaService)
+    REPO(VendaRepository)
+    DB[(PostgreSQL)]
+
+    %% Fluxo (Sequência Numérica)
+    FRONT -->|1. POST /api/vendas| CTRL
+    CTRL -->|2. criarVenda DTO| SVC
+    SVC -->|3. Validar Cliente e Estoque| SVC
+    SVC -->|4. save Venda| REPO
+    REPO -->|5. INSERT INTO vendas| DB
+    DB -->|6. ID Gerado| REPO
+    REPO -->|7. Retorna Venda Salva| SVC
+    SVC -->|8. saveAll Itens| REPO
+    REPO -->|9. INSERT INTO itens | DB
+    DB -.->|10. Trigger Atualiza Estoque| DB
+    REPO -->|11. Confirmação| SVC
+    SVC -->|12. Retorna DTO| CTRL
+    CTRL -->|13. HTTP 201 Created| FRONT
+
+    %% Estilização
+    style FRONT fill:#e1f5fe,stroke:#01579b
+    style DB fill:#fff3e0,stroke:#ef6c00
+    style SVC fill:#f3e5f5,stroke:#7b1fa2
+```
+Diagrama de Atividades (Movimentação de Estoque)
+```mermaid
+graph TD
+    INICIO([Início]) --> TIPO{Tipo de Movimentação?}
+    
+    %% Caminho de Entrada
+    TIPO -->|ENTRADA| RECEBE_ENT[Receber Dados]
+    RECEBE_ENT --> SOMA[Somar ao Estoque]
+    SOMA --> SALVAR[Salvar no Banco]
+    
+    %% Caminho de Saída
+    TIPO -->|SAÍDA| RECEBE_SAI[Receber Dados]
+    RECEBE_SAI --> VERIFICA{Estoque Suficiente?}
+    
+    %% Decisão
+    VERIFICA -->|Não| ERRO[Lançar Erro: Saldo Insuficiente]
+    ERRO --> FIM_ERRO([Fim com Falha])
+    
+    VERIFICA -->|Sim| SUBTRAI[Subtrair do Estoque]
+    SUBTRAI --> SALVAR
+    
+    SALVAR --> FIM([Fim com Sucesso])
+
+    %% Estilização
+    style VERIFICA fill:#fff9c4,stroke:#fbc02d
+    style ERRO fill:#ffcdd2,stroke:#e57373
+    style SALVAR fill:#c8e6c9,stroke:#2e7d32
+```
+Diagrama de Estados (Ciclo de Vida do Produto)
+```mermaid
+graph LR
+    %% Estados
+    INICIO((Início))
+    DISP(Disponível)
+    BAIXO(Estoque Baixo)
+    ZERO(Esgotado)
+
+    %% Transições
+    INICIO --> DISP
+    
+    DISP -->|Venda Realizada| BAIXO
+    DISP -->|Venda Total| ZERO
+    
+    BAIXO -->|Reposição| DISP
+    BAIXO -->|Venda Restante| ZERO
+    
+    ZERO -->|Reposição| DISP
+
+    %% Estilização
+    style DISP fill:#c8e6c9,stroke:#2e7d32
+    style BAIXO fill:#fff9c4,stroke:#fbc02d
+    style ZERO fill:#ffcdd2,stroke:#c62828
+```
+Diagrama de Classes (Estrutura)
+```mermaid
+graph TD
+    %% Classes
+    CLIENTE[Classe: CLIENTE]
+    VENDA[Classe: VENDA]
+    ITEM[Classe: ITEM_VENDA]
+    PRODUTO[Classe: PRODUTO]
+    ENDERECO[Classe: ENDERECO]
+
+    %% Relacionamentos
+    CLIENTE -->|1:N realiza| VENDA
+    CLIENTE -->|1:N possui| ENDERECO
+    
+    VENDA -->|1:N compõe| ITEM
+    
+    ITEM -->|N:1 referencia| PRODUTO
+    
+    %% Notas explicativas (opcionais)
+    subgraph Camada Model
+        CLIENTE
+        VENDA
+        ITEM
+        PRODUTO
+        ENDERECO
+    end
+
+    %% Estilização
+    style CLIENTE fill:#f5f5f5,stroke:#333
+    style VENDA fill:#f5f5f5,stroke:#333
+    style ITEM fill:#f5f5f5,stroke:#333
+    style PRODUTO fill:#f5f5f5,stroke:#333
+```
+
+- **Versionamento:** Git e GitHub para controle de código e histórico de alterações.
+- **Arquitetura:** MVC (Model-View-Controller) com camadas de Serviço e Repositório.
+
+---
 
 
 
